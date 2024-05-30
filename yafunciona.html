@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modelo de Enfriamiento</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.1.0"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Modelo de Enfriamiento</h1>
+        <div class="form">
+            <div class="Grupo">
+                <input type="number" id="temperatura" name="temperatura" required>
+                <label for="temperatura">Temperatura del objeto (°C):</label>
+                <span class="barra"></span>
+            </div>
+            <div class="Grupo">
+                <input type="number" id="tambiente" name="tambiente" required>
+                <label for="tambiente">Temperatura ambiente (°C):</label>
+                <span class="barra"></span>
+            </div>
+            <div class="Grupo">
+                <input type="number" id="k" name="k" step="0.01" required>
+                <label for="k">Constante de enfriamiento:</label>
+                <span class="barra"></span>
+            </div>
+            <div class="Grupo">
+                <input type="number" id="inicio_intervalo" name="inicio_intervalo" required>
+                <label for="inicio_intervalo">Inicio del intervalo (s):</label>
+                <span class="barra"></span>
+            </div>
+            <div class="Grupo">
+                <input type="number" id="fin_intervalo" name="fin_intervalo" required>
+                <label for="fin_intervalo">Fin del intervalo (s):</label>
+                <span class="barra"></span>
+            </div>
+            <div class="Grupo">
+                <input type="number" id="puntos" name="puntos" required>
+                <label for="puntos">Número de puntos:</label>
+                <span class="barra"></span>
+            </div>
+            <button type="button" id="generarGrafica">Generar/Refrescar Gráfica</button>
+        </div>
+
+        <canvas id="myChart" width="800" height="400"></canvas>
+
+        <h2 id="datosTemperaturaHeader" style="display: none;">Datos de Temperatura</h2>
+        <table border="1" id="dataTable" style="display: none;">
+            <thead>
+                <tr>
+                    <th>Tiempo (s)</th>
+                    <th>Temperatura (°C)</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+        
+        <h2 id="tCriticoHeader" style="display: none;">Tiempo crítico</h2>
+        <p id="tCriticoValue"></p>
+    </div>
+
+    <script>
+        let myChart; // Variable global para almacenar la gráfica
+
+        document.getElementById('generarGrafica').addEventListener('click', function () {
+            const Temperatura = parseFloat(document.getElementById('temperatura').value);
+            const Tambiente = parseFloat(document.getElementById('tambiente').value);
+            const k = parseFloat(document.getElementById('k').value);
+            const inicio_intervalo = parseInt(document.getElementById('inicio_intervalo').value);
+            const fin_intervalo = parseInt(document.getElementById('fin_intervalo').value);
+            const puntos = parseInt(document.getElementById('puntos').value);
+
+            const intervalo = (fin_intervalo - inicio_intervalo) / (puntos - 1);
+
+            const tiempos = [];
+            const temperaturas = [];
+            const backgroundColors = [];
+
+            let t_critico = null;
+            for (let i = 0; i < puntos; i++) {
+                const t = inicio_intervalo + i * intervalo;
+                const T_t = Tambiente + (Temperatura - Tambiente) * Math.exp(-k * t);
+                tiempos.push(t);
+                temperaturas.push(T_t);
+                if (Math.abs(T_t - Tambiente) < 0.0005 && t_critico === null) {  // Ajuste de precisión a tres decimales
+                    t_critico = t;
+                }
+                backgroundColors.push((t_critico !== null && Math.abs(t - t_critico) < 0.0005) ? 'red' : 'blue');
+            }
+
+            // Asegurarnos de que el tiempo crítico esté dentro del rango especificado
+            if (t_critico < inicio_intervalo || t_critico > fin_intervalo) {
+                t_critico = null;
+            }
+
+            const ctx = document.getElementById('myChart').getContext('2d');
+            
+            if (myChart) {
+                myChart.destroy(); // Destruir la gráfica anterior si existe
+            }
+
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: tiempos.map(t => t.toFixed(0)), // Redondear los tiempos a números enteros
+                    datasets: [{
+                        label: 'Temperatura del objeto',
+                        data: temperaturas,
+                        borderColor: 'blue',
+                        fill: false,
+                        pointBackgroundColor: backgroundColors,
+                        pointBorderColor: backgroundColors,
+                        pointRadius: 5, // Tamaño de los puntos en la gráfica
+                        pointHoverRadius: 7, // Tamaño de los puntos al pasar el mouse sobre ellos
+                    }]
+                },
+                options: {
+                    title: {
+                        display: true,
+                        text: 'Modelo de enfriamiento del objeto'
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Tiempo (s)'
+                            },
+                            ticks: {
+                                stepSize: intervalo, // Establecer el tamaño del paso
+                                precision: 0 // Redondear a números enteros
+                            },
+                            min: inicio_intervalo,
+                            max: fin_intervalo
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Temperatura (°C)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        annotation: {
+                            annotations: t_critico !== null ? [{
+                                type: 'line',
+                                mode: 'vertical',
+                                scaleID: 'x',
+                                value: t_critico,
+                                borderColor: 'red',
+                                borderWidth: 2,
+                                label: {
+                                    content: `Tiempo crítico: ${t_critico.toFixed(3)}s`,
+                                    enabled: true,
+                                    position: 'top'
+                                }
+                            }] : []
+                        }
+                    }
+                }
+            });
+
+            // Limpiar la tabla antes de agregar nuevos datos
+            const dataTable = document.getElementById('dataTable');
+            const dataTableBody = dataTable.getElementsByTagName('tbody')[0];
+            dataTableBody.innerHTML = '';
+
+            // Agregar los datos a la tabla
+            for (let i = 0; i < tiempos.length; i++) {
+                const row = dataTableBody.insertRow();
+                const cellTime = row.insertCell(0);
+                const cellTemperature = row.insertCell(1);
+                cellTime.textContent = tiempos[i].toFixed(0);
+                cellTemperature.textContent = temperaturas[i].toFixed(3); // Mostrar temperatura con 3 decimales
+            }
+
+            // Mostrar la tabla y el encabezado después de agregar todos los datos
+            dataTable.style.display = 'table';
+            document.getElementById('datosTemperaturaHeader').style.display = 'block';
+
+            // Mostrar el tiempo crítico si está dentro del rango
+            if (t_critico !== null) {
+                document.getElementById('tCriticoValue').textContent = `El tiempo crítico es: ${t_critico.toFixed(3)} segundos`;
+                document.getElementById('tCriticoHeader').style.display = 'block';
+            } else {
+                document.getElementById('tCriticoHeader').style.display = 'none';
+                document.getElementById('tCriticoValue').textContent = '';
+            }
+        });
+    </script>
+</body>
+</html>
